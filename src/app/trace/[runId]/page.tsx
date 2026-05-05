@@ -1,7 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams } from "next/navigation"
+import { createWalletClient, createPublicClient, custom, http } from "viem"
+import { baseSepolia } from "viem/chains"
+import type { ClientEvmSigner } from "@x402/evm"
+import { ExactEvmScheme } from "@x402/evm/exact/client"
+import { x402Client } from "@x402/fetch"
+import { wrapFetchWithPayment } from "@x402/fetch"
 
 const C = {
   bg: "#0a0f1a",
@@ -38,55 +44,169 @@ export default function TracePage() {
   const runId = params.runId as string
   const [trace, setTrace] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [paying, setPaying] = useState(false)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    async function fetchTrace() {
-      try {
-        const res = await fetch(`/api/por/trace/${runId}`)
-        if (res.status === 402) {
-          setError("x402 payment required. Connect your wallet and try again.")
-          setLoading(false)
-          return
-        }
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          setError(body.error || `Failed to load trace (${res.status})`)
-          setLoading(false)
-          return
-        }
-        const data = await res.json()
-        setTrace(data)
-      } catch (e: any) {
-        setError(e.message || "Failed to load trace")
-      } finally {
-        setLoading(false)
-      }
+    setReady(true)
+  }, [])
+
+  const handleAccess = useCallback(async () => {
+    if (typeof window === "undefined" || !(window as any).ethereum) {
+      setError("No wallet detected. Install MetaMask to access cognitive traces.")
+      return
     }
-    fetchTrace()
+
+    setPaying(true)
+    setError(null)
+
+    try {
+      const provider = (window as any).ethereum
+
+      // Connect wallet and get address
+      const accounts = await provider.request({ method: "eth_requestAccounts" }) as `0x${string}`[]
+      const addr = accounts[0]
+
+      // Ensure Base Sepolia network
+      try {
+        await provider.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: "0x14a34" }],
+        })
+      } catch (switchErr: any) {
+        if (switchErr.code === 4902) {
+          await provider.request({
+            method: "wallet_addEthereumChain",
+            params: [{
+              chainId: "0x14a34",
+              chainName: "Base Sepolia",
+              nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+              rpcUrls: ["https://sepolia.base.org"],
+              blockExplorerUrls: ["https://sepolia.basescan.org"],
+            }],
+          })
+        } else {
+          throw switchErr
+        }
+      }
+
+      // Build viem clients for delegation
+      const walletClient = createWalletClient({
+        account: addr,
+        chain: baseSepolia,
+        transport: custom(provider),
+      })
+
+      const publicClient = createPublicClient({
+        chain: baseSepolia,
+        transport: http(),
+      })
+
+      // Hand-build ClientEvmSigner — address + signTypedData at top level
+      const signer: ClientEvmSigner = {
+        address: addr,
+        signTypedData: (message) =>
+          walletClient.signTypedData({
+            account: addr,
+            domain: message.domain as any,
+            types: message.types as any,
+            primaryType: message.primaryType as any,
+            message: message.message as any,
+          }),
+        readContract: (args) =>
+          publicClient.readContract({
+            address: args.address,
+            abi: args.abi as any,
+            functionName: args.functionName,
+            args: args.args as any,
+          }),
+      }
+
+      // Build x402 payment client with EVM scheme
+      const client = new x402Client()
+      client.register("eip155:84532", new ExactEvmScheme(signer))
+
+      // Wrap fetch with x402 payment handling
+      const paidFetch = wrapFetchWithPayment(fetch, client)
+
+      // Make the gated request — x402 handles 402 → pay → retry
+      const res = await paidFetch(`/api/por/trace/${runId}`)
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setError(body.error || `Failed to load trace (${res.status})`)
+        setPaying(false)
+        return
+      }
+
+      const data = await res.json()
+      setTrace(data)
+    } catch (e: any) {
+      console.error("x402 payment error:", e)
+      if (e.code === 4001) {
+        setError("Payment rejected by wallet.")
+      } else {
+        setError(e.message || "Payment failed. Please try again.")
+      }
+    } finally {
+      setPaying(false)
+    }
   }, [runId])
 
-  if (loading) {
+  if (!ready) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
-        <div className="text-sm" style={{ color: C.amber }}>Loading cognitive trace...</div>
+        <div className="text-sm" style={{ color: C.lbl }}>Initializing...</div>
       </div>
     )
   }
 
-  if (error) {
+  // Payment gate screen
+  if (!trace && !loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
-        <div className="text-center">
-          <div className="text-sm mb-4" style={{ color: C.coral }}>{error}</div>
-          <a href="/" className="text-xs font-bold tracking-[1px]" style={{ color: C.amber, textDecoration: "none" }}>← BACK TO DASHBOARD</a>
+        <div className="text-center" style={{ maxWidth: 440 }}>
+          <div className="text-[9px] tracking-[3px] font-bold mb-4" style={{ color: C.amber }}>x402 VERIFIED ACCESS</div>
+          <div className="text-lg font-bold mb-2" style={{ color: C.hi }}>Cognitive Trace — Run {runId}</div>
+          <div className="text-sm mb-6 leading-relaxed" style={{ color: C.lbl }}>
+            Full reasoning audit for this pipeline run is secured by x402 micropayment on Base Sepolia. 
+            Payment is logged on-chain as proof of access.
+          </div>
+          <div className="text-xs mb-6" style={{ color: C.lbl }}>
+            Cost: <span style={{ color: C.amber, fontWeight: 700 }}>$0.001 USDC</span> · Network: Base Sepolia
+          </div>
+          {error && (
+            <div className="text-sm mb-4 p-3" style={{ color: C.coral, background: C.coral + "10", borderRadius: 6 }}>{error}</div>
+          )}
+          <button
+            onClick={handleAccess}
+            disabled={paying}
+            style={{
+              background: paying ? C.wire : C.amber,
+              color: C.bg,
+              border: "none",
+              padding: "12px 32px",
+              borderRadius: 6,
+              fontWeight: 700,
+              fontSize: 13,
+              letterSpacing: 1,
+              cursor: paying ? "wait" : "pointer",
+              opacity: paying ? 0.7 : 1,
+              transition: "opacity 0.2s",
+            }}
+          >
+            {paying ? "CONNECTING WALLET..." : "PAY & ACCESS TRACE"}
+          </button>
+          <div className="mt-8">
+            <a href="/" className="text-xs font-bold tracking-[1px]" style={{ color: C.amber, textDecoration: "none" }}>← BACK TO DASHBOARD</a>
+          </div>
         </div>
       </div>
     )
   }
 
-  if (!trace) return null
-
+  // Trace loaded — render it
   return (
     <div className="min-h-screen" style={{ background: C.bg }}>
       <div className="py-6 px-6" style={{ borderBottom: `1px solid ${C.wire}` }}>
@@ -112,7 +232,7 @@ export default function TracePage() {
           const outcomeColor = outcomeColors[sig.outcome] || C.lbl
 
           return (
-            <div key={i} className="mb-4 p-5" style={{ background: C.tint, border: `1px solid ${C.wire}`, borderRadius: 8 }}>
+            <div key={i} className="mb-4 p-5" style={{ background: "#1a2538", border: `1px solid ${C.wire}`, borderRadius: 8 }}>
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs font-bold font-mono" style={{ color: C.amber }}>SIG-{String(i + 1).padStart(3, "0")}</span>
                 <span className="text-[10px] tracking-[1px] font-bold px-2 py-0.5" style={{ color: dirColor, border: `1px solid ${dirColor}40`, borderRadius: 4 }}>{p.direction}</span>
@@ -123,7 +243,7 @@ export default function TracePage() {
                 </div>
               </div>
               <div className="text-base font-semibold mb-2" style={{ color: C.hi }}>{p.signal}</div>
-              <div className="text-sm leading-relaxed mb-3" style={{ color: C.lbl }}>{p.description}</div>
+              <div className="text-sm leading-relaxed mb-3" style={{ color: "#94a3b8" }}>{p.description}</div>
               <div className="flex flex-wrap gap-4 mb-3 pt-3" style={{ borderTop: `1px solid ${C.row}` }}>
                 <div>
                   <div className="text-[9px] tracking-[1px] font-bold" style={{ color: C.lbl }}>CONFIDENCE</div>
