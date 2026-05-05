@@ -191,67 +191,8 @@ function SignalCard({ signal, index }: { signal: any; index: number }) {
   )
 }
 
-function TraceModal({ run, runNumber, onClose }: { run: RunData; runNumber: number; onClose: () => void }) {
-  const [loading, setLoading] = useState(true)
-  const [trace, setTrace] = useState<TraceData | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const runDate = run.run_timestamp.split("T")[0]
-    fetch(`/api/por/trace/${runDate}`)
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
-      .then((data) => { setTrace(data); setLoading(false) })
-      .catch((e) => { setError(e.message); setLoading(false) })
-  }, [run])
-
-  return (
-    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", zIndex: 1000, overflowY: "auto" }} onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div style={{ maxWidth: 900, marginLeft: "auto", marginRight: "auto", marginTop: 40, marginBottom: 40, background: C.bg, border: `1px solid ${C.wire}`, borderRadius: 8, minHeight: 400 }}>
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${C.wire}` }}>
-          <div>
-            <div className="text-[9px] tracking-[3px] font-bold" style={{ color: C.amber }}>x402 COGNITIVE TRACE ACCESS</div>
-            <div className="text-sm font-semibold mt-1" style={{ color: C.hi }}>Run #{runNumber} · {new Date(run.run_timestamp).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</div>
-            <div className="text-[10px] mt-0.5" style={{ color: C.lbl }}>{run.total} violations · {run.serious} SERIOUS · {run.signal_count} signals</div>
-          </div>
-          <button onClick={onClose} className="text-lg px-3 py-1 cursor-pointer" style={{ color: C.lbl, background: "transparent", border: `1px solid ${C.wire}`, borderRadius: 4 }}>✕</button>
-        </div>
-        <div className="px-6 py-4">
-          {loading && (
-            <div className="text-center py-12">
-              <div className="text-[10px] tracking-[3px] font-bold" style={{ color: C.amber }}>LOADING COGNITIVE TRACE...</div>
-              <div className="text-[10px] mt-2" style={{ color: C.lbl }}>x402 verification on Base Sepolia</div>
-            </div>
-          )}
-          {error && (
-            <div className="p-4" style={{ color: C.coral, background: `${C.coral}10`, border: `1px solid ${C.coral}30`, borderRadius: 4 }}>
-              <div className="text-[10px] font-bold">TRACE LOAD FAILED</div>
-              <div className="text-[11px] mt-1">{error}</div>
-            </div>
-          )}
-          {trace && (
-            <>
-              <div className="flex flex-wrap gap-4 px-4 py-3 mb-4" style={{ background: `${C.olive}08`, border: `1px solid ${C.olive}20`, borderRadius: 6 }}>
-                <div className="text-[9px] tracking-[2px] font-bold" style={{ color: C.olive }}>✓ x402 PAYMENT VERIFIED</div>
-                <div className="flex gap-4 ml-auto">
-                  {Object.entries(trace._outcomes).filter(([, v]) => v > 0).map(([k, v]) => (
-                    <span key={k} className="text-[10px] font-mono font-bold" style={{ color: C.val }}>{k}: {v}</span>
-                  ))}
-                </div>
-              </div>
-              {trace.signals.map((sig, i) => (
-                <SignalCard key={i} signal={sig} index={i} />
-              ))}
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function ProofOfReasoning() {
   const [data, setData] = useState<SummaryData | null>(null)
-  const [modalRun, setModalRun] = useState<{ run: RunData; runNumber: number } | null>(null)
 
   useEffect(() => {
     fetch("/api/por/summary").then((r) => r.json()).then(setData).catch((e) => console.error("Failed to load summary:", e))
@@ -272,7 +213,6 @@ export default function ProofOfReasoning() {
 
   return (
     <div className="min-h-screen" style={{ background: C.bg, width: "100%", maxWidth: "100vw", overflowX: "hidden" }}>
-      {modalRun && <TraceModal run={modalRun.run} runNumber={modalRun.runNumber} onClose={() => setModalRun(null)} />}
       <div className="py-6 px-6" style={{ borderBottom: `1px solid ${C.wire}` }}>
         <div style={{ maxWidth: 1100, marginLeft: "auto", marginRight: "auto", paddingLeft: 24, paddingRight: 24 }}>
           <div className="text-[9px] tracking-[3px] font-bold" style={{ color: C.amber }}>INTEGRITY PROTOCOL</div>
@@ -367,7 +307,7 @@ export default function ProofOfReasoning() {
               const date = new Date(run.run_timestamp)
               const dateStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
               return (
-                <div key={run.run_timestamp} className="grid gap-2 py-2 cursor-pointer transition-colors" style={{ gridTemplateColumns: "50px 80px 60px 65px 65px 75px", borderBottom: `1px solid ${C.row}` }} onClick={() => setModalRun({ run, runNumber: runNum })}>
+                <div key={run.run_timestamp} className="grid gap-2 py-2 cursor-pointer transition-colors" style={{ gridTemplateColumns: "50px 80px 60px 65px 65px 75px", borderBottom: `1px solid ${C.row}` }} onClick={() => window.open(`/trace/${run.run_timestamp.split("T")[0]}`, "_blank")}>
                   <span className="text-[11px] font-bold font-mono" style={{ color: C.amber }}>#{runNum}</span>
                   <span className="text-[11px] font-mono" style={{ color: C.lbl }}>{dateStr}</span>
                   <span className="text-[11px] font-mono" style={{ color: C.val }}>{run.signal_count}</span>
