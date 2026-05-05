@@ -1,5 +1,7 @@
-import fs from "fs"
-import path from "path"
+"use client"
+
+import { useState, useEffect } from "react"
+import { useParams } from "next/navigation"
 
 const C = {
   bg: "#0a0f1a",
@@ -13,30 +15,77 @@ const C = {
   amber: "#c9956a",
   slate: "#8b9fc7",
   coral: "#c9726a",
-  lavender: "#9b8ab8",
+  lavender: "#a78bfa",
 }
 
-export default async function TracePage({ params }: { params: Promise<{ runId: string }> }) {
-  const { runId } = await params
-  const tracesDir = path.join(process.cwd(), "data", "traces")
-  const files = fs.readdirSync(tracesDir)
-  const matching = files.filter(
-    (f) => f.startsWith(`cognitive-trace-${runId}`) && f.endsWith(".json")
-  )
+const dirColors: Record<string, string> = {
+  ACCELERATION: C.olive,
+  DECELERATION: C.coral,
+  AMBIGUOUS: C.slate,
+  CONTRADICTORY: C.lavender,
+}
 
-  if (matching.length === 0) {
+const outcomeColors: Record<string, string> = {
+  SURVIVED: C.olive,
+  REJECTED: C.coral,
+  FLAGGED: C.amber,
+  STRIPPED: C.lavender,
+  PRUNED: C.slate,
+}
+
+export default function TracePage() {
+  const params = useParams()
+  const runId = params.runId as string
+  const [trace, setTrace] = useState<any>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchTrace() {
+      try {
+        const res = await fetch(`/api/por/trace/${runId}`)
+        if (res.status === 402) {
+          setError("x402 payment required. Connect your wallet and try again.")
+          setLoading(false)
+          return
+        }
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          setError(body.error || `Failed to load trace (${res.status})`)
+          setLoading(false)
+          return
+        }
+        const data = await res.json()
+        setTrace(data)
+      } catch (e: any) {
+        setError(e.message || "Failed to load trace")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchTrace()
+  }, [runId])
+
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
-        <div className="text-sm" style={{ color: C.coral }}>No trace found for {runId}</div>
+        <div className="text-sm" style={{ color: C.amber }}>Loading cognitive trace...</div>
       </div>
     )
   }
 
-  const tracePath = path.join(tracesDir, matching[0])
-  const trace = JSON.parse(fs.readFileSync(tracePath, "utf-8"))
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
+        <div className="text-center">
+          <div className="text-sm mb-4" style={{ color: C.coral }}>{error}</div>
+          <a href="/" className="text-xs font-bold tracking-[1px]" style={{ color: C.amber, textDecoration: "none" }}>← BACK TO DASHBOARD</a>
+        </div>
+      </div>
+    )
+  }
 
-  const dirColors: Record<string, string> = { ACCELERATION: C.olive, DECELERATION: C.coral, AMBIGUOUS: C.slate, CONTRADICTORY: C.lavender }
-  const outcomeColors: Record<string, string> = { SURVIVED: C.olive, REJECTED: C.coral, FLAGGED: C.amber, STRIPPED: C.lavender, PRUNED: C.slate }
+  if (!trace) return null
 
   return (
     <div className="min-h-screen" style={{ background: C.bg }}>
@@ -44,7 +93,7 @@ export default async function TracePage({ params }: { params: Promise<{ runId: s
         <div style={{ maxWidth: 900, marginLeft: "auto", marginRight: "auto" }}>
           <div className="text-[9px] tracking-[3px] font-bold" style={{ color: C.amber }}>x402 VERIFIED · COGNITIVE TRACE</div>
           <h1 className="text-lg font-bold mt-1" style={{ color: C.hi }}>
-            Run {runId} · {trace._signal_count} signals · {Object.entries(trace._outcomes as Record<string, number>).filter(([, v]) => v > 0).map(([k, v]) => `${v} ${k}`).join(" · ")}
+            Run {runId} · {trace._signal_count} signals · {Object.entries(trace._outcomes as Record<string, number>).filter(([, v]: any) => v > 0).map(([k, v]: any) => `${v} ${k}`).join(" · ")}
           </h1>
           <div className="text-[10px] mt-1" style={{ color: C.lbl }}>
             Assembled {new Date(trace._assembled_at).toLocaleString()} · This trace was accessed via x402 micropayment on Base Sepolia
@@ -76,12 +125,30 @@ export default async function TracePage({ params }: { params: Promise<{ runId: s
               <div className="text-base font-semibold mb-2" style={{ color: C.hi }}>{p.signal}</div>
               <div className="text-sm leading-relaxed mb-3" style={{ color: C.lbl }}>{p.description}</div>
               <div className="flex flex-wrap gap-4 mb-3 pt-3" style={{ borderTop: `1px solid ${C.row}` }}>
-                <div><div className="text-[9px] tracking-[1px] font-bold" style={{ color: C.lbl }}>CONFIDENCE</div><div className="text-sm font-semibold" style={{ color: C.val }}>{p.confidence}</div></div>
-                <div><div className="text-[9px] tracking-[1px] font-bold" style={{ color: C.lbl }}>SEVERITY</div><div className="text-sm font-semibold" style={{ color: C.val }}>{p.severity}</div></div>
-                <div><div className="text-[9px] tracking-[1px] font-bold" style={{ color: C.lbl }}>VIOLATIONS</div><div className="text-sm font-semibold" style={{ color: totalViolations > 0 ? C.coral : C.val }}>{totalViolations}</div></div>
-                {sig.corrections_applied?.length > 0 && <div><div className="text-[9px] tracking-[1px] font-bold" style={{ color: C.lbl }}>CORRECTIONS</div><div className="text-sm font-semibold" style={{ color: C.lavender }}>{sig.corrections_applied.length}</div></div>}
+                <div>
+                  <div className="text-[9px] tracking-[1px] font-bold" style={{ color: C.lbl }}>CONFIDENCE</div>
+                  <div className="text-sm font-semibold" style={{ color: C.val }}>{p.confidence}</div>
+                </div>
+                <div>
+                  <div className="text-[9px] tracking-[1px] font-bold" style={{ color: C.lbl }}>SEVERITY</div>
+                  <div className="text-sm font-semibold" style={{ color: C.val }}>{p.severity}</div>
+                </div>
+                <div>
+                  <div className="text-[9px] tracking-[1px] font-bold" style={{ color: C.lbl }}>VIOLATIONS</div>
+                  <div className="text-sm font-semibold" style={{ color: totalViolations > 0 ? C.coral : C.val }}>{totalViolations}</div>
+                </div>
+                {sig.corrections_applied?.length > 0 && (
+                  <div>
+                    <div className="text-[9px] tracking-[1px] font-bold" style={{ color: C.lbl }}>CORRECTIONS</div>
+                    <div className="text-sm font-semibold" style={{ color: C.lavender }}>{sig.corrections_applied.length}</div>
+                  </div>
+                )}
               </div>
-              {traceUrl && <a href={traceUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-bold tracking-[1px]" style={{ color: C.amber, textDecoration: "none" }}>VIEW FULL COGNITIVE TRACE ↗</a>}
+              {traceUrl && (
+                <a href={traceUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-bold tracking-[1px]" style={{ color: C.amber, textDecoration: "none" }}>
+                  VIEW FULL COGNITIVE TRACE ↗
+                </a>
+              )}
             </div>
           )
         })}

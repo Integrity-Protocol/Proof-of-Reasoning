@@ -9,11 +9,15 @@ const facilitatorClient = new HTTPFacilitatorClient({ url: "https://x402.org/fac
 const server = new x402ResourceServer(facilitatorClient)
 server.register("eip155:84532", new ExactEvmScheme())
 
-const handler = async (
-  request: NextRequest,
-  { params }: { params: Promise<{ runId: string }> }
-) => {
-  const { runId } = await params
+const handler = async (request: NextRequest) => {
+  // Extract runId from URL path: /api/por/trace/2026-05-02
+  const segments = request.nextUrl.pathname.split("/")
+  const runId = segments[segments.length - 1]
+
+  if (!runId) {
+    return NextResponse.json({ error: "Missing runId" }, { status: 400 })
+  }
+
   const tracesDir = path.join(process.cwd(), "data", "traces")
 
   if (!fs.existsSync(tracesDir)) {
