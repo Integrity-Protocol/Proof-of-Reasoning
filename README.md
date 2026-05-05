@@ -12,7 +12,7 @@
 
 ## What It Does
 
-The Proof of Reasoning terminal visualizes **71,893 AI reasoning failures** caught autonomously by the Integrity Protocol across **145 pipeline runs** over 3 months of continuous production operation.
+The Proof of Reasoning terminal visualizes **4,863 AI reasoning failures** caught autonomously by the Integrity Protocol across **145 pipeline runs** over 3 months of continuous production operation.
 
 - **Billboard** — headline metrics, severity distribution, gate escalation patterns, top violated rules, and emergent learning indicators. Free and public.
 - **Run Ledger** — scrollable index of every autonomous pipeline run with per-run violation summaries. Free to browse.
