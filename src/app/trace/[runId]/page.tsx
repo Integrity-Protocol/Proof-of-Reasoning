@@ -258,6 +258,7 @@ export default function TracePage() {
                 <span className="text-xs font-bold font-mono" style={{ color: C.amber }}>SIG-{String(i + 1).padStart(3, "0")}</span>
                 <span className="text-[10px] tracking-[1px] font-bold px-2 py-0.5" style={{ color: dirColor, border: `1px solid ${dirColor}40`, borderRadius: 4 }}>{p.direction}</span>
                 <span className="text-[11px]" style={{ color: C.lbl }}>{p.category}</span>
+                {sig.acquisition_source === "x402" && <span className="text-[10px] tracking-[1px] font-bold px-2 py-0.5" style={{ color: C.amber, border: `1px solid ${C.amber}60`, borderRadius: 4 }}>x402 ACQUIRED</span>}
                 <div className="ml-auto flex items-center gap-2">
                   {j && <span className="text-sm font-bold font-mono" style={{ color: C.amber }}>{j.final_composite}</span>}
                   <span className="text-[10px] tracking-[1px] font-bold px-2 py-0.5" style={{ color: outcomeColor, background: outcomeColor + "15", borderRadius: 4 }}>{sig.outcome}</span>
@@ -284,11 +285,18 @@ export default function TracePage() {
                     <div className="text-sm font-semibold mt-0.5" style={{ color: C.lavender }}>{sig.corrections_applied.length}</div>
                   </div>
                 )}
-                {traceUrl && (
-                  <div className="ml-auto self-end">
-                    <a href={traceUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold tracking-[1px]" style={{ color: C.amber, textDecoration: "none" }}>
-                      VIEW FULL COGNITIVE TRACE ↗
-                    </a>
+                {(traceUrl || sig.acquisition_source === "x402") && (
+                  <div className="ml-auto self-end flex gap-4">
+                    {sig.acquisition_source === "x402" && signalId && (
+                      <a href={`https://main.dsuo7ekm8i4d4.amplifyapp.com?signal_id=${signalId}`} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold tracking-[1px]" style={{ color: C.amber, textDecoration: "none" }}>
+                        VIEW ACQUISITION IN AGENT HUB →
+                      </a>
+                    )}
+                    {traceUrl && (
+                      <a href={traceUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold tracking-[1px]" style={{ color: C.amber, textDecoration: "none" }}>
+                        VIEW FULL COGNITIVE TRACE ↗
+                      </a>
+                    )}
                   </div>
                 )}
               </div>
