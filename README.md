@@ -4,7 +4,7 @@
 
 🔗 **Live Demo:** [main.d3peri73tp529z.amplifyapp.com](https://main.d3peri73tp529z.amplifyapp.com)
 
-🎥 **Demo Video:** *Coming soon*
+🎥 **Demo Video:** [Watch the full walkthrough](https://www.loom.com/share/6a8db8f341c849b08cb816cf2c97fb8b)
 
 📂 **Pre-existing infrastructure:** [github.com/Integrity-Protocol](https://github.com/Integrity-Protocol)
 
@@ -107,7 +107,14 @@ Disclosure letter delivered to organizers on Day 1. Full commit history is publi
 
 ## Screenshots
 
-*Screenshots will be added before submission.*
+### Billboard — 4,863 reasoning failures across 145 autonomous pipeline runs
+![Billboard](public/screenshots/billboard.png)
+
+### Signal Trace — x402 ACQUIRED badges on signals where the agent purchased data autonomously
+![Signal Trace](public/screenshots/trace-signals.png)
+
+### x402 Payment Gate — cryptographic notarization on Base Sepolia via MetaMask
+![x402 Payment](public/screenshots/x402-payment.png)
 
 ---
 
